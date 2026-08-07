@@ -46,12 +46,13 @@ static JXL_INLINE JXL_MAYBE_UNUSED size_t
 Num0BitsAboveMS1Bit_Nonzero(SizeTag<8> /* tag */, const uint64_t x) {
   JXL_DASSERT(x != 0);
 #if JXL_COMPILER_MSVC
-#if JXL_ARCH_X64
+// ARM64 MSVC also supports _BitScanReverse64 natively.
+#if JXL_ARCH_X64 || defined(_M_ARM64)
   unsigned long index;
   _BitScanReverse64(&index, x);
   return 63 - index;
-#else   // JXL_ARCH_X64
-  // _BitScanReverse64 not available
+#else   // JXL_ARCH_X64 || _M_ARM64
+  // _BitScanReverse64 not available on this target; use two 32-bit calls.
   uint32_t msb = static_cast<uint32_t>(x >> 32u);
   unsigned long index;
   if (msb == 0) {
@@ -62,7 +63,7 @@ Num0BitsAboveMS1Bit_Nonzero(SizeTag<8> /* tag */, const uint64_t x) {
     _BitScanReverse(&index, msb);
     return 31 - index;
   }
-#endif  // JXL_ARCH_X64
+#endif  // JXL_ARCH_X64 || _M_ARM64
 #else
   return static_cast<size_t>(__builtin_clzll(x));
 #endif
@@ -90,12 +91,13 @@ static JXL_INLINE JXL_MAYBE_UNUSED size_t
 Num0BitsBelowLS1Bit_Nonzero(SizeTag<8> /* tag */, const uint64_t x) {
   JXL_DASSERT(x != 0);
 #if JXL_COMPILER_MSVC
-#if JXL_ARCH_X64
+// ARM64 MSVC also supports _BitScanForward64 natively.
+#if JXL_ARCH_X64 || defined(_M_ARM64)
   unsigned long index;
   _BitScanForward64(&index, x);
   return index;
-#else   // JXL_ARCH_64
-  // _BitScanForward64 not available
+#else   // JXL_ARCH_X64 || _M_ARM64
+  // _BitScanForward64 not available on this target; use two 32-bit calls.
   uint32_t lsb = static_cast<uint32_t>(x & 0xFFFFFFFF);
   unsigned long index;
   if (lsb == 0) {
@@ -106,7 +108,7 @@ Num0BitsBelowLS1Bit_Nonzero(SizeTag<8> /* tag */, const uint64_t x) {
     _BitScanForward(&index, lsb);
     return index;
   }
-#endif  // JXL_ARCH_X64
+#endif  // JXL_ARCH_X64 || _M_ARM64
 #else
   return static_cast<size_t>(__builtin_ctzll(x));
 #endif

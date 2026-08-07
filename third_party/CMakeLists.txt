@@ -139,17 +139,51 @@ elseif (JPEGXL_BUNDLE_LIBPNG)
   endif()
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/libpng/scripts/pnglibconf.h.prebuilt" DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/libpng")
   file(RENAME "${CMAKE_CURRENT_SOURCE_DIR}/libpng/pnglibconf.h.prebuilt" "${CMAKE_CURRENT_SOURCE_DIR}/libpng/pnglibconf.h")
+  # Build only the static zlib so that the RC resource file (win32/zlib1.rc)
+  # is not processed by the resource compiler, which fails with ClangCL on ARM64
+  # because it can't parse modern Clang ARM64 system headers.
+  set(_saved_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+  set(BUILD_SHARED_LIBS OFF)
   add_subdirectory(zlib)
+  set(BUILD_SHARED_LIBS ${_saved_BUILD_SHARED_LIBS})
+  # After add_subdirectory(zlib), the binary dir has the generated zconf.h.
+  # Copy zlib.h there too so that ZLIB_INCLUDE_DIR can point to a single
+  # directory that contains both headers, which FindZLIB expects.
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlib.h"
+                 "${CMAKE_CURRENT_BINARY_DIR}/zlib/zlib.h" COPYONLY)
   set(PNG_STATIC ON CACHE BOOL "")
   set(PNG_TOOLS OFF CACHE BOOL "")
   set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "")
-  set(ZLIB_INCLUDE_DIR bing_bong_dir)
+  # Point ZLIB_INCLUDE_DIR at the binary dir, which now holds both zlib.h
+  # (just copied) and the generated zconf.h, so libpng's genout.cmake step
+  # finds both headers with a single -I flag.
+  set(ZLIB_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/zlib" CACHE PATH "" FORCE)
   set(ZLIB_LIBRARY bing_bong_lib)
   add_library(ZLIB::ZLIB INTERFACE IMPORTED)
+  # Provide zlib headers to ZLIB::ZLIB so libpng's pnglibconf.c compile step
+  # can find <zlib.h>.  We need both the source tree (zlib.h) and the binary
+  # tree (generated zconf.h).
+  set_target_properties(ZLIB::ZLIB PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES
+      "${CMAKE_CURRENT_BINARY_DIR}/zlib")
   set(PNG_TESTS OFF CACHE BOOL "")
   set(SKIP_INSTALL_ALL ON CACHE BOOL "")
-  set(ZLIB_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/zlib/")
+  # Include both the source dir (zlib.h) and the binary dir (generated zconf.h)
+  # so that libpng's genout.cmake pnglibconf.c compile step can find both headers.
+  set(ZLIB_INCLUDE_DIRS "${CMAKE_CURRENT_BINARY_DIR}/zlib")
   set(ZLIB_LIBRARIES zlibstatic)
+  # When cross-compiling to ARM64 on an x64 host, CMAKE_SYSTEM_PROCESSOR is AMD64
+  # (the host), so libpng's architecture detection sets PNG_TARGET_ARCHITECTURE to
+  # "amd64" and skips the NEON sources.  Force PNG_ARM_NEON=on so that the NEON
+  # intrinsic files are compiled — the ClangCL ARM64 toolchain defines __ARM_NEON
+  # and requires those symbols to be present at link time.
+  # Also override PNG_TARGET_ARCHITECTURE so that the initial ARM/NEON branch is
+  # actually taken (the architecture check happens before PNG_ARM_NEON is read).
+  if(CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64" OR CMAKE_VS_PLATFORM_NAME STREQUAL "ARM64")
+    set(PNG_ARM_NEON "on" CACHE STRING "Enable ARM NEON optimizations" FORCE)
+    set(PNG_TARGET_ARCHITECTURE "arm64" CACHE STRING
+        "Override libpng arch detection for ARM64 cross-compile" FORCE)
+  endif()
   add_subdirectory(libpng EXCLUDE_FROM_ALL)
   set(PNG_FOUND YES PARENT_SCOPE)
   set(PNG_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/libpng/" PARENT_SCOPE)
