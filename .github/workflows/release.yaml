@@ -119,6 +119,7 @@ jobs:
         - ubuntu:24.04
         - ubuntu:22.04
         - ubuntu:20.04
+        - debian:bullseye
         - debian:bookworm
         - debian:trixie
         - debian:sid
@@ -246,6 +247,13 @@ jobs:
           - triplet: x64-windows
             arch: '-A x64'
             static: 'OFF'
+          - triplet: arm64-windows-static
+            arch: '-A ARM64'
+            vcpkg_triplet: arm64-windows-static
+          - triplet: arm64-windows
+            arch: '-A ARM64'
+            static: 'OFF'
+            vcpkg_triplet: arm64-windows
 
     env:
       VCPKG_VERSION: '2025.10.17'
