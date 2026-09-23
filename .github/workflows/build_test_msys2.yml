@@ -26,7 +26,7 @@ jobs:
   build_test:
     name: Windows MSYS2 / ${{ matrix.msystem }}
     if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI:none') }}
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os || 'windows-latest' }}
     continue-on-error: ${{ matrix.faulty || false }}
     strategy:
       fail-fast: false
@@ -40,14 +40,8 @@ jobs:
              - ButteraugliTest.Distmap
              - JxlTest.RoundtripLargeEmptyModular
            disable_benchmark: true
-         # ARM64 support
          - msystem: clangarm64
-           faulty: true
-         # "Legacy" toolchains are being "phased-out":
-         # https://www.msys2.org/news/#2023-12-13-starting-to-drop-some-32-bit-packages
-         # clang32 is already missing required "gtest" and "libavif"
-         # - msystem: clang32
-         #   disable_benchmark: true
+           os: windows-11-arm
 
     defaults:
       run:
