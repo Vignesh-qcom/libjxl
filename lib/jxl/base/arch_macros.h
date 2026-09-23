@@ -22,7 +22,8 @@ namespace jxl {
 #define JXL_ARCH_PPC 0
 #endif
 
-#if defined(__aarch64__) || defined(__arm__)
+// ARM64: include _M_ARM64 so MSVC ARM64 builds are correctly detected.
+#if defined(__aarch64__) || defined(__arm__) || defined(_M_ARM64)
 #define JXL_ARCH_ARM 1
 #else
 #define JXL_ARCH_ARM 0

@@ -94,5 +94,15 @@ foreach (TESTFILE IN LISTS JPEGXL_INTERNAL_TESTS)
     set_target_properties(${TESTNAME} PROPERTIES COMPILE_FLAGS "-Wno-error")
   endif ()
   # 240 seconds because some build types (e.g. coverage) can be quite slow.
-  gtest_discover_tests(${TESTNAME} DISCOVERY_TIMEOUT 240 DISCOVERY_MODE PRE_TEST)
+  # Use PRE_TEST discovery mode when cross-compiling (host cannot run target
+  # ARM64 binaries) so that test enumeration is deferred until CTest runs on
+  # a real ARM64 device rather than failing during the post-build step.
+  if(CMAKE_CROSSCOMPILING OR
+     (CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64" AND
+      NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "ARM64"))
+    gtest_discover_tests(${TESTNAME} DISCOVERY_TIMEOUT 240
+                         DISCOVERY_MODE PRE_TEST)
+  else()
+    gtest_discover_tests(${TESTNAME} DISCOVERY_TIMEOUT 240)
+  endif()
 endforeach ()
