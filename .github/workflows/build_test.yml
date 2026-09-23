@@ -424,3 +424,92 @@ jobs:
       if: env.WILL_BENCH == 'true'
       run: |
         ./ci.sh gbench --benchmark_min_time=0.5s
+
+  build_test_windows_arm64:
+    name: Windows ARM64 Build ${{ matrix.name }}
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI:none') }}
+    runs-on: windows-11-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [release, lowprecision]
+        include:
+          - name: release
+            mode: Release
+            test_in_pr: true
+          - name: lowprecision
+            mode: Release
+            test_in_pr: true
+            cmake_extra_cxxflags: "/DJXL_HIGH_PRECISION=0"
+
+    env:
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      WILL_TEST: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && (matrix.test_in_pr || contains(github.event.pull_request.labels.*.name, 'CI:full'))) }}
+
+    steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+      with:
+        egress-policy: audit
+
+    - name: Checkout the source
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      with:
+        submodules: true
+        fetch-depth: 2
+        persist-credentials: false
+
+    - name: Git environment
+      id: git-env
+      run: echo "parent=$(git rev-parse ${{ github.sha }}^)" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+
+    - name: sccache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.SCCACHE_DIR }}
+        key: build-windows-arm64-${{ github.sha }}-${{ matrix.name }}
+        restore-keys: |
+          build-windows-arm64-${{ steps.git-env.outputs.parent }}-${{ matrix.name }}
+
+    - name: Install dependencies via vcpkg
+      run: |
+        & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
+          brotli libjpeg-turbo libpng zlib giflib `
+          --triplet arm64-windows-static
+      shell: pwsh
+
+    - name: Configure
+      run: |
+        $BUILD_TESTING = if ($env:WILL_TEST -eq "true") { "ON" } else { "OFF" }
+        $EXTRA_FLAGS = "${{ matrix.cmake_extra_cxxflags }}"
+        $EXTRA_ARGS = if ($EXTRA_FLAGS) { @("-DCMAKE_CXX_FLAGS=$EXTRA_FLAGS") } else { @() }
+        cmake -B build -A ARM64 `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+          -DVCPKG_TARGET_TRIPLET=arm64-windows-static `
+          -DCMAKE_CXX_COMPILER_LAUNCHER=sccache `
+          -DCMAKE_C_COMPILER_LAUNCHER=sccache `
+          -DJPEGXL_FORCE_SYSTEM_BROTLI=OFF `
+          -DJPEGXL_ENABLE_OPENEXR=OFF `
+          -DJPEGXL_ENABLE_PLUGINS=OFF `
+          -DJPEGXL_ENABLE_VIEWERS=OFF `
+          -DJPEGXL_ENABLE_DEVTOOLS=OFF `
+          -DJPEGXL_ENABLE_HWY_AVX3_DL=OFF `
+          -DHWY_BROKEN_TARGETS=0 `
+          -DBUILD_TESTING=$BUILD_TESTING `
+          @EXTRA_ARGS
+      shell: pwsh
+
+    - name: Build
+      run: cmake --build build --config ${{ matrix.mode }} --parallel
+      shell: pwsh
+
+    - name: sccache stats
+      run: sccache --show-stats
+      shell: pwsh
+
+    - name: Test
+      if: env.WILL_TEST == 'true'
+      run: ctest --test-dir build -C ${{ matrix.mode }} --output-on-failure -E bash_test
+      shell: pwsh
+
