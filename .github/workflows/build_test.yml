@@ -432,7 +432,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        name: [release, lowprecision]
+        name: [release, lowprecision, debug, scalar, asan]
         include:
           - name: release
             mode: Release
@@ -441,6 +441,18 @@ jobs:
             mode: Release
             test_in_pr: true
             cmake_extra_cxxflags: "/DJXL_HIGH_PRECISION=0"
+          - name: debug
+            mode: Debug
+          # Build scalar-only hwy instructions on ARM64 — validates non-NEON fallback paths.
+          - name: scalar
+            mode: Release
+            cmake_extra_cxxflags: "/DHWY_COMPILE_ONLY_SCALAR /DFJXL_ENABLE_AVX2=0 /DFJXL_ENABLE_AVX512=0"
+          # ASan is supported by clang-cl on Windows ARM64.
+          - name: asan
+            mode: RelWithDebInfo
+            cmake_extra_args: >-
+              -DCMAKE_CXX_FLAGS=/fsanitize=address
+              -DCMAKE_EXE_LINKER_FLAGS=/fsanitize=address
 
     env:
       SCCACHE_DIR: ${{ github.workspace }}/.sccache
@@ -501,6 +513,10 @@ jobs:
         $EXTRA_FLAGS = "${{ matrix.cmake_extra_cxxflags }}"
         if ($EXTRA_FLAGS) {
           $cmakeArgs += "-DCMAKE_CXX_FLAGS=$EXTRA_FLAGS"
+        }
+        $EXTRA_ARGS = "${{ matrix.cmake_extra_args }}"
+        if ($EXTRA_ARGS) {
+          $EXTRA_ARGS -split '\s+' | Where-Object { $_ } | ForEach-Object { $cmakeArgs += $_ }
         }
         & cmake @cmakeArgs
       shell: pwsh

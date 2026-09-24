@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   build_test:
-    name: Windows MSYS2 / ${{ matrix.msystem }}
+    name: Windows MSYS2 / ${{ matrix.msystem }}${{ matrix.variant && format(':{0}', matrix.variant) || '' }}
     if: ${{ !contains(github.event.pull_request.labels.*.name, 'CI:none') }}
     runs-on: ${{ matrix.os || 'windows-latest' }}
     continue-on-error: ${{ matrix.faulty || false }}
@@ -42,6 +42,13 @@ jobs:
            disable_benchmark: true
          - msystem: clangarm64
            os: windows-11-arm
+         # Scalar fallback on ARM64 — validates non-NEON code paths under clangarm64.
+         - msystem: clangarm64
+           os: windows-11-arm
+           variant: scalar
+           cmake_extra_cxxflags: >-
+             -DHWY_COMPILE_ONLY_SCALAR -DFJXL_ENABLE_AVX2=0 -DFJXL_ENABLE_AVX512=0
+           disable_benchmark: true
 
     defaults:
       run:
@@ -82,12 +89,14 @@ jobs:
 
       - name: CMake configure
         run: |
+          EXTRA_CXX_FLAGS="${{ matrix.cmake_extra_cxxflags }}"
           cmake \
             -DCMAKE_BUILD_TYPE=Release \
             -DJPEGXL_ENABLE_JNI=OFF \
             -DJPEGXL_ENABLE_MANPAGES=OFF \
             -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
             -DJPEGXL_FORCE_SYSTEM_GTEST=ON \
+            ${EXTRA_CXX_FLAGS:+-DCMAKE_CXX_FLAGS="${EXTRA_CXX_FLAGS}"} \
             -B build \
             -G Ninja
 
