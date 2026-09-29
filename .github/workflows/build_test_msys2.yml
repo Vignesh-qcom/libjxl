@@ -22,6 +22,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+
 jobs:
   build_test:
     name: Windows MSYS2 / ${{ matrix.msystem }}
