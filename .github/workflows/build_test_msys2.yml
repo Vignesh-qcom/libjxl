@@ -42,6 +42,11 @@ jobs:
              - ButteraugliTest.Distmap
              - JxlTest.RoundtripLargeEmptyModular
            disable_benchmark: true
+        # "Legacy" toolchains are being "phased-out":
+        # https://www.msys2.org/news/#2023-12-13-starting-to-drop-some-32-bit-packages
+        # clang32 is already missing required "gtest" and "libavif"
+        # - msystem: clang32
+        #   disable_benchmark: true
          - msystem: clangarm64
            os: windows-11-arm
 
@@ -75,7 +80,7 @@ jobs:
             cmake:p
             giflib:p
             gtest:p
-            libavif:p
+            ${{ matrix.msystem != 'mingw32' && 'libavif:p' || '' }}
             libjpeg-turbo:p
             libpng:p
             libwebp:p
